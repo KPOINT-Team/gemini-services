@@ -1,9 +1,9 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { setBaseCorsHeaders, handleOptions } from "../lib/cors.js";
+import { setCorsHeaders, handleOptions } from "../lib/cors.js";
 
 export default function handler(req: VercelRequest, res: VercelResponse) {
   if (handleOptions(req, res)) return;
-  setBaseCorsHeaders(req, res);
+  setCorsHeaders(req, res);
 
   if (req.method !== "GET") {
     res.status(405).json({ error: "method_not_allowed" });

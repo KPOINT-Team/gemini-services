@@ -1,7 +1,5 @@
 import jwt, { JwtPayload } from "jsonwebtoken";
 
-const ONE_HOUR_SECONDS = 60 * 60;
-
 export interface ProxyJwtPayload extends JwtPayload {
   sub: string;
 }
@@ -14,24 +12,7 @@ function getSecret(): string {
   return secret;
 }
 
-export function signProxyJwt(clientId: string): {
-  token: string;
-  expiresAt: number;
-} {
-  const secret = getSecret();
-  const iat = Math.floor(Date.now() / 1000);
-  const exp = iat + ONE_HOUR_SECONDS;
-
-  const token = jwt.sign(
-    { sub: clientId, iat, exp },
-    secret,
-    { algorithm: "HS256" }
-  );
-
-  return { token, expiresAt: exp * 1000 };
-}
-
-export function verifyProxyJwt(token: string): ProxyJwtPayload | null {
+export function verifyJwt(token: string): ProxyJwtPayload | null {
   try {
     const secret = getSecret();
     const decoded = jwt.verify(token, secret, { algorithms: ["HS256"] });
@@ -40,6 +21,16 @@ export function verifyProxyJwt(token: string): ProxyJwtPayload | null {
   } catch {
     return null;
   }
+}
+
+export function signProxyJwt(clientId: string): { token: string; expiresAt: number } {
+  const secret = getSecret();
+  const nowSec = Math.floor(Date.now() / 1000);
+  const expSec = nowSec + 3600; // 1 hour
+  const token = jwt.sign({ sub: clientId, iat: nowSec, exp: expSec }, secret, {
+    algorithm: "HS256",
+  });
+  return { token, expiresAt: expSec * 1000 }; // expiresAt in milliseconds
 }
 
 export function extractBearerToken(authHeader: string | undefined): string | null {

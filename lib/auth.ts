@@ -1,4 +1,4 @@
-import { timingSafeEqual } from "node:crypto";
+import { timingSafeEqual } from "crypto";
 
 export interface ClientConfig {
   id: string;
@@ -8,64 +8,34 @@ export interface ClientConfig {
 
 let cachedClients: ClientConfig[] | null = null;
 
-function loadClients(): ClientConfig[] {
+function getClients(): ClientConfig[] {
   if (cachedClients) return cachedClients;
-
   const raw = process.env.CLIENTS_JSON;
   if (!raw) {
     throw new Error("CLIENTS_JSON environment variable is not set");
   }
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    throw new Error("CLIENTS_JSON is not valid JSON");
-  }
-
-  if (!Array.isArray(parsed)) {
-    throw new Error("CLIENTS_JSON must be a JSON array");
-  }
-
-  const clients: ClientConfig[] = parsed.map((entry, index) => {
-    if (
-      typeof entry !== "object" ||
-      entry === null ||
-      typeof (entry as ClientConfig).id !== "string" ||
-      typeof (entry as ClientConfig).secret !== "string"
-    ) {
-      throw new Error(`CLIENTS_JSON entry ${index} is missing id or secret`);
-    }
-    return entry as ClientConfig;
-  });
-
-  cachedClients = clients;
-  return clients;
+  cachedClients = JSON.parse(raw) as ClientConfig[];
+  return cachedClients;
 }
 
-function constantTimeEqual(a: string, b: string): boolean {
-  const aBuf = Buffer.from(a, "utf8");
-  const bBuf = Buffer.from(b, "utf8");
-  if (aBuf.length !== bBuf.length) return false;
-  return timingSafeEqual(aBuf, bBuf);
+export function getClientById(id: string): ClientConfig | null {
+  const clients = getClients();
+  return clients.find((c) => c.id === id) ?? null;
 }
 
 export function verifyClientCredentials(
-  clientId: unknown,
-  clientSecret: unknown
+  id: string,
+  secret: string
 ): ClientConfig | null {
-  if (typeof clientId !== "string" || typeof clientSecret !== "string") {
-    return null;
-  }
-
-  const clients = loadClients();
-  const client = clients.find((c) => c.id === clientId);
+  const client = getClientById(id);
   if (!client) return null;
 
-  return constantTimeEqual(client.secret, clientSecret) ? client : null;
-}
+  const expected = Buffer.from(client.secret, "utf-8");
+  const actual = Buffer.from(secret, "utf-8");
 
-export function getClientById(clientId: string): ClientConfig | null {
-  const clients = loadClients();
-  return clients.find((c) => c.id === clientId) ?? null;
+  if (expected.length !== actual.length) return null;
+
+  if (!timingSafeEqual(expected, actual)) return null;
+
+  return client;
 }

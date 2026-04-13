@@ -33,7 +33,10 @@ export function isModelAllowed(model: unknown): model is string {
  * The returned token is safe to hand to a browser client for direct
  * Live WebSocket connection.
  */
-export async function mintLiveToken(model: string): Promise<{
+export async function mintLiveToken(
+  model: string,
+  liveConfig?: Record<string, unknown>
+): Promise<{
   token: string;
   expiresAt: number;
   model: string;
@@ -48,8 +51,10 @@ export async function mintLiveToken(model: string): Promise<{
       uses: 1,
       expireTime: new Date(expireMs).toISOString(),
       newSessionExpireTime: new Date(newSessionExpireMs).toISOString(),
+      httpOptions: { apiVersion: "v1alpha" },
       liveConnectConstraints: {
         model,
+        ...(liveConfig ? { config: liveConfig } : {}),
       },
     },
   });

@@ -1,11 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { getClientById } from "../../lib/auth.js";
-import {
-  setBaseCorsHeaders,
-  handleOptions,
-  enforceClientOrigin,
-} from "../../lib/cors.js";
-import { extractBearerToken, verifyProxyJwt } from "../../lib/jwt.js";
+import { setCorsHeaders, handleOptions } from "../../lib/cors.js";
+import { extractBearerToken, verifyJwt } from "../../lib/jwt.js";
 import { getGenAI, isModelAllowed } from "../../lib/gemini.js";
 
 interface GenerateBody {
@@ -19,7 +14,7 @@ interface GenerateBody {
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (handleOptions(req, res)) return;
-  setBaseCorsHeaders(req, res);
+  setCorsHeaders(req, res);
 
   if (req.method !== "POST") {
     res.status(405).json({ error: "method_not_allowed" });
@@ -32,20 +27,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
-  const payload = verifyProxyJwt(token);
+  const payload = verifyJwt(token);
   if (!payload) {
     res.status(401).json({ error: "invalid_or_expired_token" });
-    return;
-  }
-
-  const client = getClientById(payload.sub);
-  if (!client) {
-    res.status(401).json({ error: "unknown_client" });
-    return;
-  }
-
-  if (!enforceClientOrigin(req, client)) {
-    res.status(403).json({ error: "origin_not_allowed" });
     return;
   }
 

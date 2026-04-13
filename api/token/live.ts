@@ -1,46 +1,37 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { verifyClientCredentials } from "../../lib/auth.js";
-import {
-  setBaseCorsHeaders,
-  handleOptions,
-  enforceClientOrigin,
-} from "../../lib/cors.js";
+import { setCorsHeaders, handleOptions } from "../../lib/cors.js";
+import { extractBearerToken, verifyJwt } from "../../lib/jwt.js";
 import { isModelAllowed, mintLiveToken } from "../../lib/gemini.js";
-
-interface LiveTokenBody {
-  clientId?: unknown;
-  clientSecret?: unknown;
-  model?: unknown;
-}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (handleOptions(req, res)) return;
-  setBaseCorsHeaders(req, res);
+  setCorsHeaders(req, res);
 
   if (req.method !== "POST") {
     res.status(405).json({ error: "method_not_allowed" });
     return;
   }
 
-  const body = (req.body ?? {}) as LiveTokenBody;
-  const client = verifyClientCredentials(body.clientId, body.clientSecret);
-  if (!client) {
-    res.status(401).json({ error: "invalid_credentials" });
+  const token = extractBearerToken(req.headers.authorization);
+  if (!token) {
+    res.status(401).json({ error: "missing_bearer_token" });
     return;
   }
 
-  if (!enforceClientOrigin(req, client)) {
-    res.status(403).json({ error: "origin_not_allowed" });
+  const payload = verifyJwt(token);
+  if (!payload) {
+    res.status(401).json({ error: "invalid_or_expired_token" });
     return;
   }
 
-  if (!isModelAllowed(body.model)) {
+  const { model, config } = (req.body ?? {}) as { model?: unknown; config?: Record<string, unknown> };
+  if (!isModelAllowed(model)) {
     res.status(403).json({ error: "model_not_allowed" });
     return;
   }
 
   try {
-    const result = await mintLiveToken(body.model);
+    const result = await mintLiveToken(model, config);
     res.status(200).json(result);
   } catch (err) {
     const message = err instanceof Error ? err.message : "unknown_error";
