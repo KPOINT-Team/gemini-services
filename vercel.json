@@ -1,0 +1,15 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "api/proxy/generate.ts": {
+      "maxDuration": 30
+    },
+    "api/token/live.ts": {
+      "maxDuration": 10
+    },
+    "api/token/proxy.ts": {
+      "maxDuration": 10
+    }
+  },
+  "regions": ["bom1"]
+}
