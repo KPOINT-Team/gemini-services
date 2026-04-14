@@ -2,6 +2,7 @@
   "name": "gemini-token-service",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "description": "Standalone Gemini token-minting service for multiple client projects. Deployed on Vercel.",
   "scripts": {
     "dev": "node --require tsx/cjs server.js",
