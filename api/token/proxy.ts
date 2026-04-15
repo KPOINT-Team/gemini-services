@@ -28,6 +28,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
+  // Per-client origin check: only allow login from this client's allowed origins
+  const origin = req.headers.origin;
+  if (client.allowedOrigins && client.allowedOrigins.length > 0) {
+    if (!origin || !client.allowedOrigins.includes(origin)) {
+      res.status(403).json({ error: "origin_not_allowed" });
+      return;
+    }
+  }
+
   const result = signProxyJwt(client.id);
   res.status(200).json(result);
 }
