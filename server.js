@@ -7,6 +7,7 @@ const routes = {
   "/api/health": "./api/health.ts",
   "/api/token/live": "./api/token/live.ts",
   "/api/token/proxy": "./api/token/proxy.ts",
+  "/api/token/refresh": "./api/token/refresh.ts",
   "/api/proxy/generate": "./api/proxy/generate.ts",
 };
 
