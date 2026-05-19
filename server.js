@@ -9,6 +9,8 @@ const routes = {
   "/api/token/proxy": "./api/token/proxy.ts",
   "/api/token/refresh": "./api/token/refresh.ts",
   "/api/proxy/generate": "./api/proxy/generate.ts",
+  "/api/calculate-portfolio": "./api/calculate-portfolio.ts",
+  "/api/generate-pdf": "./api/generate-pdf.ts",
 };
 
 // Vercel handlers expect (req, res) with req.body parsed and req.method set.

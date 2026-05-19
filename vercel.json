@@ -11,6 +11,12 @@
     },
     "api/token/proxy.ts": {
       "maxDuration": 10
+    },
+    "api/calculate-portfolio.ts": {
+      "maxDuration": 30
+    },
+    "api/generate-pdf.ts": {
+      "maxDuration": 30
     }
   },
   "regions": ["bom1"]
