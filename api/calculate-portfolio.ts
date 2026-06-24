@@ -120,27 +120,41 @@ function parentsCount(code?: string): number {
   return 0;
 }
 
-// Build a per-person array [Self, Spouse?, ...Kids(None), ...Parents(None)].
-// Self + Spouse carry real values; children/parents are padded with `pad`.
+// Build a per-person array [Self, Spouse?, ...Kids(pad), ...Parents(parentPad)].
+// Self + Spouse carry real values; children are padded with `pad` and parents with
+// `parentPad` (defaults to `pad`). Parents need their own padding for fields like
+// DOB, where the upstream requires a parent to be older than the child placeholder.
 function perPerson<T>(
   self: T,
   spouse: T | null,
   kids: number,
   parents: number,
   pad: T,
+  parentPad: T = pad,
 ): T[] {
   const out: T[] = [self];
   if (spouse !== null) out.push(spouse);
   for (let i = 0; i < kids; i++) out.push(pad);
-  for (let i = 0; i < parents; i++) out.push(pad);
+  for (let i = 0; i < parents; i++) out.push(parentPad);
   return out;
 }
 
 function buildSompoBody(p: IntermediatePayload) {
   const dep = p.dependants || {};
-  const hasSpouse = !!dep.spouse;
-  const kids = Number(dep.children) || 0;
-  const parents = parentsCount(dep.parents);
+
+  // Who enters the quote is driven by `cover_for` (who the user wants insured), not
+  // `dependants` (who merely relies on them). A person can be a dependant without
+  // being covered — e.g. parents declared as dependants while the user only wants to
+  // cover Self; those parents are then NOT in this quote and need no DOB/details.
+  // `dependants` still supplies the details (kid count, which parents) for whoever
+  // IS covered. NOTE: the upstream requires the Dependent_*/count fields to match the
+  // per-person array lengths, so these counts must be cover-driven (see return block).
+  const coverFor = p.cover_for || [];
+  const covers = (who: string) => coverFor.includes(who);
+
+  const hasSpouse = covers("Spouse");
+  const kids = covers("Children") ? Number(dep.children) || 0 : 0;
+  const parents = covers("Parents") ? parentsCount(dep.parents) : 0;
 
   const smoke = p.smoke || {};
   const drink = p.drink || {};
@@ -178,7 +192,11 @@ function buildSompoBody(p: IntermediatePayload) {
   // ---- Demographics per-person arrays ----
   // We only collect Self (+ derive Spouse where possible). Children/parents get
   // placeholder demographics so array lengths line up with the family composition.
-  const PLACEHOLDER_DOB = "01/01/2015";
+  const PLACEHOLDER_DOB = "01/01/2015"; // ~child age (kids placeholder)
+  // The upstream validates parent age into a 37..55 window (rejects "<=36" and
+  // ">55"). Parent DOB is not collected by the form, so use a placeholder squarely
+  // mid-window (~age 45). Verified accepted by the live API.
+  const PLACEHOLDER_PARENT_DOB = "01/01/1981";
   const PLACEHOLDER_W = 60;
   const PLACEHOLDER_H = 160;
 
@@ -198,6 +216,7 @@ function buildSompoBody(p: IntermediatePayload) {
     kids,
     parents,
     PLACEHOLDER_DOB,
+    PLACEHOLDER_PARENT_DOB, // parents must be >36 per upstream validation
   );
   const weight = perPerson(
     Number(p.weight) || PLACEHOLDER_W,
@@ -249,6 +268,12 @@ function buildSompoBody(p: IntermediatePayload) {
     city: (p.city || "Mumbai").toString(),
     pincode: parseInt(rawPincode, 10),
     marital_status: p.marital_status || "Single",
+    // IMPORTANT: the upstream binds the Dependent_*/count fields to the per-person
+    // arrays — Dependent_parents_count must equal the number of parents actually
+    // present in the gender/dob/... arrays, or it returns 400 "failed in Model
+    // Premium Updation" (verified against the live API). The arrays only contain
+    // COVERED people, so these counts are necessarily cover-driven too. A dependant
+    // who isn't covered simply isn't in this quote.
     FamilyFloater: hasSpouse || kids > 0 ? "Yes" : "No",
     doYouHaveDependents: hasSpouse || kids > 0 || parents > 0 ? "Yes" : "No",
     Dependent_Spouse: hasSpouse ? "Yes" : "No",
