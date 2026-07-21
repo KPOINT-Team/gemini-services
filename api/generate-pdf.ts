@@ -4,8 +4,12 @@ import {
   handleProtectMeWellPreflight,
   enforceOrigin,
   getProtectMeWellApiKey,
-  PROTECTMEWELL_BASE_URL,
 } from "../lib/protectmewell.js";
+
+// Universal Sompo PDF endpoint lives on the demo host (different from the
+// main PROTECTMEWELL_BASE_URL used by other endpoints).
+const SOMPO_PDF_BASE_URL = "https://demo.protectmewell.com";
+const SOMPO_PDF_PATH = "/api/v3/universal-sompo/generate_pdf";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (handleProtectMeWellPreflight(req, res)) return;
@@ -18,9 +22,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
-  const { hash } = (req.body ?? {}) as { hash?: unknown };
-  if (typeof hash !== "string" || hash.length === 0) {
-    res.status(400).json({ status: false, error: "Hash is required for PDF generation" });
+  const payload = req.body;
+  if (!payload || typeof payload !== "object") {
+    res.status(400).json({ status: false, error: "Request body is required for PDF generation" });
     return;
   }
 
@@ -33,14 +37,36 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const upstream = await fetch(`${PROTECTMEWELL_BASE_URL}/api/v1/k-point/generate_pdf`, {
-      method: "POST",
-      headers: {
-        "x-api-key": apiKey,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ hash }),
-    });
+    // The upstream host (demo.protectmewell.com) intermittently fails to connect
+    // (DNS/transient network errors surface as a thrown "fetch failed"). Retry on a
+    // THROWN error only — an HTTP response (even 4xx/5xx) is a real answer and is
+    // never retried. Mirrors the retry loop in calculate-portfolio.ts.
+    const MAX_ATTEMPTS = 4;
+    let upstream: Response | undefined;
+    let lastErr: unknown;
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      try {
+        upstream = await fetch(`${SOMPO_PDF_BASE_URL}${SOMPO_PDF_PATH}`, {
+          method: "POST",
+          headers: {
+            "x-api-key": apiKey,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        });
+        break;
+      } catch (err) {
+        lastErr = err;
+        const message = err instanceof Error ? err.message : String(err);
+        console.warn(
+          `[generate-pdf] upstream connect failed (attempt ${attempt}/${MAX_ATTEMPTS}): ${message}`,
+        );
+        if (attempt < MAX_ATTEMPTS) {
+          await new Promise((r) => setTimeout(r, 300 * attempt));
+        }
+      }
+    }
+    if (!upstream) throw lastErr ?? new Error("upstream_unreachable");
 
     const text = await upstream.text();
     let data: unknown;
